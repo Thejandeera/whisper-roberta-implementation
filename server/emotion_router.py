@@ -1,12 +1,11 @@
 import os
-import shutil
 import warnings
 import site
 import re
 import time
 import sys
 import wave
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from faster_whisper import WhisperModel
 from transformers import pipeline
@@ -71,13 +70,14 @@ async def live_stream(websocket: WebSocket):
     temp_file = f"temp_{id(websocket)}.wav" 
     
     chunk_timer = time.time() 
+    last_speech_time = time.time()
+    last_text = ""
 
     try:
         while True:
             chunk = await websocket.receive_bytes()
             raw_audio_buffer.extend(chunk)
             
-            # Increased from 2.0 to 2.5 seconds to give Whisper slightly more context per loop
             if time.time() - chunk_timer > 2.5:
                 if len(raw_audio_buffer) == 0:
                     continue
@@ -93,48 +93,70 @@ async def live_stream(websocket: WebSocket):
                     full_transcript = " ".join([segment.text for segment in segments]).strip()
 
                     if full_transcript:
+                        if full_transcript != last_text:
+                            last_speech_time = time.time()
+                            last_text = full_transcript
+
                         sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', full_transcript) if s.strip()]
                         
                         partial_text = ""
-                        sentence_completed = False # Track if we actually finished a sentence
+                        force_clear_buffer = False
+                        has_trailing_partial = False
                         
                         for sentence in sentences:
-                            # CRITICAL FIX: Ensure the sentence actually ends with punctuation
-                            if re.search(r'[.!?]$', sentence):
-                                if sentence not in analyzed_sentences:
-                                    emotion_data = predict_emotion(sentence)
+                            has_punctuation = bool(re.search(r'[.!?]$', sentence))
+                            is_hanging = not has_punctuation and (time.time() - last_speech_time > 3.0)
+
+                            if has_punctuation or is_hanging:
+                                clean_sentence = sentence if has_punctuation else sentence + "."
+                                
+                                if clean_sentence not in analyzed_sentences:
+                                    emotion_data = predict_emotion(clean_sentence)
                                     sentiment = categorize_emotion(emotion_data["label"], emotion_data["score"])
                                     
                                     await websocket.send_json({
                                         "type": "analyzed",
-                                        "text": sentence,
+                                        "text": clean_sentence,
                                         "emotion": emotion_data["label"],
                                         "sentiment_category": sentiment,
                                         "confidence": emotion_data["score"]
                                     })
-                                    analyzed_sentences.add(sentence)
-                                    sentence_completed = True
+                                    
+                                    analyzed_sentences.add(clean_sentence)
+                                    analyzed_sentences.add(sentence) 
+                                    force_clear_buffer = True 
                             else:
                                 partial_text = sentence
+                                has_trailing_partial = True
 
                         await websocket.send_json({
                             "type": "partial",
                             "text": partial_text
                         })
 
-                        # ONLY clear the buffer if a complete sentence was found.
-                        # Otherwise, let the buffer keep growing so the partial word isn't cut off.
-                        if sentence_completed:
+                        # CRITICAL FIX: Only clear the buffer if a sentence finished AND there are no lingering words
+                        if force_clear_buffer and not has_trailing_partial:
                             raw_audio_buffer.clear()
+                            last_text = ""
+                            last_speech_time = time.time()
+                            
+                    else:
+                        await websocket.send_json({
+                            "type": "partial",
+                            "text": ""
+                        })
 
                 except Exception as e:
-                    pass 
+                    import traceback
+                    print("Error during transcription loop:")
+                    traceback.print_exc()
                 
                 chunk_timer = time.time()
                 
-                # Fail-safe: If buffer gets over 10 seconds with no punctuation, clear it anyway to prevent lag
                 if len(raw_audio_buffer) > (16000 * 2 * 10): 
                     raw_audio_buffer.clear()
+                    last_text = ""
+                    last_speech_time = time.time()
 
     except WebSocketDisconnect:
         pass
