@@ -61,6 +61,8 @@ function getCategoryStyle(categoryName: string) {
 
 export default function ModelPage() {
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(false);
+
   const [livePartialText, setLivePartialText] = useState("");
   const [analyzedSentences, setAnalyzedSentences] = useState<AnalysisResult[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +70,13 @@ export default function ModelPage() {
   // Vercel AI SDK integration mapping to /api/chat
   const { messages, sendMessage, setMessages, status } = useChat();
   const isLoading = status === "streaming" || status === "submitted";
+  
+  // Track emotion meta mapping per sentence
   const [emotionMeta, setEmotionMeta] = useState<Record<string, { emotion: string, sentiment: string }>>({});
+
+  // Accumulate transcribed text during the call session
+  const [accumulatedText, setAccumulatedText] = useState("");
+  const accumulatedTextRef = useRef("");
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -76,6 +84,9 @@ export default function ModelPage() {
   const wsRef = useRef<WebSocket | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Silence submission timer
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-scroll table to bottom when new items are added
   useEffect(() => {
@@ -87,30 +98,83 @@ export default function ModelPage() {
   // Auto-scroll chat log to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, livePartialText, isLoading]);
+  }, [messages, livePartialText, accumulatedText, isLoading]);
 
   useEffect(() => {
     return () => {
+      isRecordingRef.current = false;
       if (wsRef.current) wsRef.current.close();
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     };
   }, []);
+
+  const submitAccumulatedSpeech = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
+    const finalSpeech = accumulatedTextRef.current.trim();
+    if (finalSpeech) {
+      try {
+        sendMessage({ text: finalSpeech });
+      } catch (err) {
+        console.error("Error sending message to chatbot:", err);
+      }
+    }
+    
+    // Clear client-side buffers for the next turn while keeping socket/mic alive
+    accumulatedTextRef.current = "";
+    setAccumulatedText("");
+    setLivePartialText("");
+  };
+
+  const resetSilenceTimer = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+    
+    // Trigger submission after 3 seconds of absolute silence (no active speech updates)
+    silenceTimerRef.current = setTimeout(() => {
+      submitAccumulatedSpeech();
+    }, 3000);
+  };
 
   const startLiveStream = async () => {
     try {
       setError(null);
       setLivePartialText("");
+      setAccumulatedText("");
+      accumulatedTextRef.current = "";
       setAnalyzedSentences([]);
       setMessages([]); // Clear chat history on new session
       setEmotionMeta({});
+      
+      isRecordingRef.current = true;
+
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
 
       wsRef.current = new WebSocket("ws://localhost:8001/live-stream");
       
       wsRef.current.onmessage = (event) => {
+        // Prevent updates if we have stopped listening
+        if (!isRecordingRef.current) return;
+
         const data = JSON.parse(event.data);
+        const cleanText = data.text ? data.text.trim() : "";
+
+        // Reset the silence timer ONLY if the server transcribes a non-empty text
+        if (cleanText) {
+          resetSilenceTimer();
+        }
+
         if (data.type === "partial") {
           setLivePartialText(data.text);
         } else if (data.type === "analyzed") {
-          // 1. Add sentence to the analyzed matrix list
+          // 1. Add sentence to the analyzed matrix list on the right
           setAnalyzedSentences((prev) => [...prev, data]);
           
           // 2. Map emotion metadata to this specific text
@@ -122,8 +186,12 @@ export default function ModelPage() {
           // 3. Clear partial text
           setLivePartialText(""); 
 
-          // 4. Trigger Ollama chat bot automatically with the transcribed text
-          sendMessage({ text: data.text });
+          // 4. Accumulate the clean text to the turn's transcript
+          if (cleanText) {
+            const separator = accumulatedTextRef.current ? " " : "";
+            accumulatedTextRef.current += separator + cleanText;
+            setAccumulatedText(accumulatedTextRef.current);
+          }
         }
       };
 
@@ -157,24 +225,58 @@ export default function ModelPage() {
     } catch (err: any) {
       console.error("Error accessing microphone:", err);
       setError("Microphone access denied or connection failed.");
+      isRecordingRef.current = false;
+      setIsRecording(false);
     }
   };
 
   const stopLiveStream = () => {
+    isRecordingRef.current = false;
     setIsRecording(false);
     
-    if (processorRef.current && audioContextRef.current) {
-      processorRef.current.disconnect();
-      audioContextRef.current.close();
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
     
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+    try {
+      if (processorRef.current) {
+        processorRef.current.disconnect();
+      }
+    } catch (e) {
+      console.warn("Error disconnecting audio processor:", e);
+    }
+    
+    try {
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close();
+      }
+    } catch (e) {
+      console.warn("Error closing audio context:", e);
+    }
+    
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          try {
+            track.stop();
+          } catch (err) {}
+        });
+      }
+    } catch (e) {
+      console.warn("Error stopping media tracks:", e);
     }
 
-    if (wsRef.current) {
-      wsRef.current.close();
+    try {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    } catch (e) {
+      console.warn("Error closing WebSocket:", e);
     }
+
+    // Submit any final accumulated text
+    submitAccumulatedSpeech();
   };
 
   return (
@@ -206,12 +308,12 @@ export default function ModelPage() {
           ) : (
              <button className="model-btn" onClick={stopLiveStream} style={{ background: "rgba(239,68,68,0.2)", color: "#f87171", border: "1px solid rgba(239,68,68,0.4)", width: "100%", padding: "1.25rem" }}>
                 <div className="model-recording-pulse" style={{ marginRight: "8px", display: "inline-block" }}></div>
-                End Voice Call
+                End Call & Send Message
              </button>
           )}
         </section>
 
-        {(messages.length > 0 || livePartialText || analyzedSentences.length > 0) && (
+        {(messages.length > 0 || livePartialText || accumulatedText || analyzedSentences.length > 0) && (
           <div className="model-grid">
             
             {/* Left Column: Support Chatbot */}
@@ -226,27 +328,38 @@ export default function ModelPage() {
                     .join("");
                     
                   if (m.role === 'user') {
-                    const meta = emotionMeta[textContent];
-                    const emoStyle = getEmotionStyle(meta?.emotion || "neutral");
-                    const catStyle = getCategoryStyle(meta?.sentiment || "neutral");
+                    // Split the user message by punctuation to look up individual sentence emotions
+                    const userSentences = textContent.split(/(?<=[.!?])\s+/);
                     
                     return (
                       <div key={m.id} className="model-chat-bubble model-chat-bubble--user">
                         <div className="model-chat-bubble-meta model-chat-bubble-meta--user">
                           <span>You</span>
-                          {meta && (
-                            <>
-                              <span className="model-table-badge" style={{ background: catStyle.bg, color: catStyle.text, border: `1px solid ${catStyle.text}40`, padding: "1px 5px", fontSize: "0.6rem" }}>
-                                {meta.sentiment.toUpperCase()}
-                              </span>
-                              <span className="model-table-badge" style={{ background: emoStyle.bg, color: emoStyle.text, padding: "1px 5px", fontSize: "0.6rem" }}>
-                                {meta.emotion.toUpperCase()}
-                              </span>
-                            </>
-                          )}
                         </div>
                         <div className="model-chat-text model-chat-text--user">
-                          "{textContent}"
+                          {userSentences.map((sentence, sIdx) => {
+                            const trimmed = sentence.trim();
+                            if (!trimmed) return null;
+                            const meta = emotionMeta[trimmed] || emotionMeta[trimmed + "."] || emotionMeta[trimmed.replace(/\.$/, "")];
+                            const emoStyle = meta ? getEmotionStyle(meta.emotion) : null;
+                            const catStyle = meta ? getCategoryStyle(meta.sentiment) : null;
+                            
+                            return (
+                              <span key={sIdx} style={{ display: "block", marginBottom: sIdx < userSentences.length - 1 ? "8px" : "0" }}>
+                                "{trimmed}"
+                                {meta && (
+                                  <span style={{ display: "inline-flex", gap: "4px", marginLeft: "8px", verticalAlign: "middle" }}>
+                                    <span className="model-table-badge" style={{ background: catStyle!.bg, color: catStyle!.text, border: `1px solid ${catStyle!.text}40`, padding: "1px 5px", fontSize: "0.55rem", lineHeight: "1", textTransform: "uppercase" }}>
+                                      {meta.sentiment.toUpperCase()}
+                                    </span>
+                                    <span className="model-table-badge" style={{ background: emoStyle!.bg, color: emoStyle!.text, padding: "1px 5px", fontSize: "0.55rem", lineHeight: "1", textTransform: "uppercase" }}>
+                                      {meta.emotion.toUpperCase()}
+                                    </span>
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -265,11 +378,14 @@ export default function ModelPage() {
                   );
                 })}
 
-                {/* Live listening preview */}
-                {livePartialText && (
-                  <div className="model-chat-bubble model-chat-bubble--user" style={{ opacity: 0.65 }}>
-                    <div className="model-chat-text model-chat-text--user" style={{ fontStyle: "italic" }}>
-                      "{livePartialText}..."
+                {/* User's active/preview speech bubble while recording */}
+                {(accumulatedText || livePartialText) && isRecording && (
+                  <div className="model-chat-bubble model-chat-bubble--user" style={{ opacity: 0.85 }}>
+                    <div className="model-chat-bubble-meta model-chat-bubble-meta--user">
+                      <span>You (Speaking...)</span>
+                    </div>
+                    <div className="model-chat-text model-chat-text--user" style={{ borderStyle: "dashed", borderColor: "rgba(255,255,255,0.3)" }}>
+                      "{accumulatedText}{livePartialText ? " " + livePartialText : ""}..."
                     </div>
                   </div>
                 )}

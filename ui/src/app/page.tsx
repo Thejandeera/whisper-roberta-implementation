@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "@ai-sdk/react";
-import "./model.css";
+import "./model/model.css";
 
 const EMOTION_COLORS: Record<string, { bg: string; text: string; glow: string }> = {
   admiration:     { bg: "rgba(251,191,36,0.15)",  text: "#fbbf24", glow: "0 0 24px rgba(251,191,36,0.3)" },
