@@ -105,9 +105,10 @@ async def live_stream(websocket: WebSocket):
                         
                         for sentence in sentences:
                             has_punctuation = bool(re.search(r'[.!?]$', sentence))
-                            is_hanging = not has_punctuation and (time.time() - last_speech_time > 3.0)
+                            is_hanging = not has_punctuation and (time.time() - last_speech_time > 2.0)
+                            is_too_long = not has_punctuation and len(sentence.split()) >= 20
 
-                            if has_punctuation or is_hanging:
+                            if has_punctuation or is_hanging or is_too_long:
                                 clean_sentence = sentence if has_punctuation else sentence + "."
                                 
                                 if clean_sentence not in analyzed_sentences:
@@ -134,7 +135,6 @@ async def live_stream(websocket: WebSocket):
                             "text": partial_text
                         })
 
-                        # CRITICAL FIX: Only clear the buffer if a sentence finished AND there are no lingering words
                         if force_clear_buffer and not has_trailing_partial:
                             raw_audio_buffer.clear()
                             last_text = ""
@@ -147,9 +147,7 @@ async def live_stream(websocket: WebSocket):
                         })
 
                 except Exception as e:
-                    import traceback
-                    print("Error during transcription loop:")
-                    traceback.print_exc()
+                    pass 
                 
                 chunk_timer = time.time()
                 

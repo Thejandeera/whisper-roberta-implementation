@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useChat } from "@ai-sdk/react";
 import "./model.css";
 
 interface AnalysisResult {
@@ -50,11 +51,11 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 const DEFAULT_EMOTION_STYLE = { bg: "rgba(99,102,241,0.15)", text: "#818cf8", glow: "0 0 24px rgba(99,102,241,0.3)" };
 
 function getEmotionStyle(emotion: string) {
-  return EMOTION_COLORS[emotion.toLowerCase()] ?? DEFAULT_EMOTION_STYLE;
+  return EMOTION_COLORS[emotion?.toLowerCase()] ?? DEFAULT_EMOTION_STYLE;
 }
 
 function getCategoryStyle(categoryName: string) {
-  const normalized = categoryName.toLowerCase();
+  const normalized = categoryName?.toLowerCase();
   return CATEGORY_COLORS[normalized] || CATEGORY_COLORS.neutral;
 }
 
@@ -64,11 +65,17 @@ export default function ModelPage() {
   const [analyzedSentences, setAnalyzedSentences] = useState<AnalysisResult[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Vercel AI SDK integration mapping to /api/chat
+  const { messages, sendMessage, setMessages, status } = useChat();
+  const isLoading = status === "streaming" || status === "submitted";
+  const [emotionMeta, setEmotionMeta] = useState<Record<string, { emotion: string, sentiment: string }>>({});
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll table to bottom when new items are added
   useEffect(() => {
@@ -76,6 +83,11 @@ export default function ModelPage() {
       tableRef.current.scrollTop = tableRef.current.scrollHeight;
     }
   }, [analyzedSentences]);
+
+  // Auto-scroll chat log to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, livePartialText, isLoading]);
 
   useEffect(() => {
     return () => {
@@ -88,6 +100,8 @@ export default function ModelPage() {
       setError(null);
       setLivePartialText("");
       setAnalyzedSentences([]);
+      setMessages([]); // Clear chat history on new session
+      setEmotionMeta({});
 
       wsRef.current = new WebSocket("ws://localhost:8001/live-stream");
       
@@ -96,8 +110,20 @@ export default function ModelPage() {
         if (data.type === "partial") {
           setLivePartialText(data.text);
         } else if (data.type === "analyzed") {
+          // 1. Add sentence to the analyzed matrix list
           setAnalyzedSentences((prev) => [...prev, data]);
+          
+          // 2. Map emotion metadata to this specific text
+          setEmotionMeta(prev => ({
+            ...prev,
+            [data.text]: { emotion: data.emotion, sentiment: data.sentiment_category }
+          }));
+
+          // 3. Clear partial text
           setLivePartialText(""); 
+
+          // 4. Trigger Ollama chat bot automatically with the transcribed text
+          sendMessage({ text: data.text });
         }
       };
 
@@ -158,10 +184,10 @@ export default function ModelPage() {
       
       <div className="model-container">
         <header className="model-header">
-          <div className="model-header__badge">Vanguard AI · Live Stream</div>
-          <h1 className="model-header__title">Live Emotion Matrix</h1>
+          <div className="model-header__badge">Vanguard AI · Live Voice Hub</div>
+          <h1 className="model-header__title">Support Voice Agent</h1>
           <p className="model-header__subtitle">
-            Speak into the microphone. Transcriptions and emotional analysis occur in real-time.
+            Speak to interact with Zenvixor Studios' AI customer agent and see real-time emotional analysis.
           </p>
         </header>
 
@@ -175,67 +201,133 @@ export default function ModelPage() {
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                   <line x1="12" y1="19" x2="12" y2="22"/>
                 </svg>
-                Initialize Live Microphone
+                Start Voice Chat
              </button>
           ) : (
              <button className="model-btn" onClick={stopLiveStream} style={{ background: "rgba(239,68,68,0.2)", color: "#f87171", border: "1px solid rgba(239,68,68,0.4)", width: "100%", padding: "1.25rem" }}>
                 <div className="model-recording-pulse" style={{ marginRight: "8px", display: "inline-block" }}></div>
-                Stop Live Analysis
+                End Voice Call
              </button>
           )}
         </section>
 
-        {(analyzedSentences.length > 0 || livePartialText) && (
-          <section className="model-result-section">
-            <h3 className="model-result-title" style={{ fontSize: "1.2rem", textAlign: "left", marginBottom: "0.5rem" }}>Live Inference Log</h3>
+        {(messages.length > 0 || livePartialText || analyzedSentences.length > 0) && (
+          <div className="model-grid">
             
-            {/* Live Partial Text Indicator */}
-            <div className="model-live-indicator">
-              <span className="model-live-dot"></span>
-              <span className="model-live-text">
-                {livePartialText ? `"${livePartialText}..."` : "Listening..."}
-              </span>
-            </div>
-
-            {/* Structured Data Table */}
-            <div className="model-table-container" ref={tableRef}>
-              <table className="model-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: "50%" }}>Transcribed Text</th>
-                    <th style={{ width: "20%" }}>Sentiment</th>
-                    <th style={{ width: "20%" }}>Emotion</th>
-                    <th style={{ width: "10%", textAlign: "right" }}>Conf.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {analyzedSentences.map((block, idx) => {
-                    const emoStyle = getEmotionStyle(block.emotion);
-                    const catStyle = getCategoryStyle(block.sentiment_category);
+            {/* Left Column: Support Chatbot */}
+            <div className="model-chat-container">
+              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#ffffff", marginBottom: "1rem" }}>Support Agent Chat</h3>
+              
+              <div className="model-chat-log">
+                {messages.map((m) => {
+                  const textContent = m.parts
+                    .filter((part) => part.type === "text")
+                    .map((part) => part.text)
+                    .join("");
+                    
+                  if (m.role === 'user') {
+                    const meta = emotionMeta[textContent];
+                    const emoStyle = getEmotionStyle(meta?.emotion || "neutral");
+                    const catStyle = getCategoryStyle(meta?.sentiment || "neutral");
                     
                     return (
-                      <tr key={idx}>
-                        <td className="model-table-text">"{block.text}"</td>
-                        <td>
-                          <span className="model-table-badge" style={{ background: catStyle.bg, color: catStyle.text, border: `1px solid ${catStyle.text}40` }}>
-                            {block.sentiment_category.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="model-table-badge" style={{ background: emoStyle.bg, color: emoStyle.text }}>
-                            {block.emotion}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: "right", color: "#9ca3af", fontVariantNumeric: "tabular-nums" }}>
-                          {(block.confidence * 100).toFixed(1)}%
-                        </td>
-                      </tr>
+                      <div key={m.id} className="model-chat-bubble model-chat-bubble--user">
+                        <div className="model-chat-bubble-meta model-chat-bubble-meta--user">
+                          <span>You</span>
+                          {meta && (
+                            <>
+                              <span className="model-table-badge" style={{ background: catStyle.bg, color: catStyle.text, border: `1px solid ${catStyle.text}40`, padding: "1px 5px", fontSize: "0.6rem" }}>
+                                {meta.sentiment.toUpperCase()}
+                              </span>
+                              <span className="model-table-badge" style={{ background: emoStyle.bg, color: emoStyle.text, padding: "1px 5px", fontSize: "0.6rem" }}>
+                                {meta.emotion.toUpperCase()}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        <div className="model-chat-text model-chat-text--user">
+                          "{textContent}"
+                        </div>
+                      </div>
                     );
-                  })}
-                </tbody>
-              </table>
+                  }
+                  
+                  // AI Agent Response
+                  return (
+                    <div key={m.id} className="model-chat-bubble model-chat-bubble--ai">
+                      <div className="model-chat-bubble-meta">
+                        <span>Vanguard AI</span>
+                      </div>
+                      <div className="model-chat-text model-chat-text--ai">
+                        {textContent}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Live listening preview */}
+                {livePartialText && (
+                  <div className="model-chat-bubble model-chat-bubble--user" style={{ opacity: 0.65 }}>
+                    <div className="model-chat-text model-chat-text--user" style={{ fontStyle: "italic" }}>
+                      "{livePartialText}..."
+                    </div>
+                  </div>
+                )}
+
+                {/* Agent is generating loading bubble */}
+                {isLoading && messages[messages.length - 1]?.role === 'user' && (
+                  <div className="model-chat-bubble model-chat-bubble--ai">
+                    <div className="model-chat-bubble-meta">
+                      <span className="model-live-dot" style={{ display: "inline-block" }}></span>
+                      <span>Vanguard is generating response...</span>
+                    </div>
+                  </div>
+                )}
+                
+                <div ref={chatEndRef} />
+              </div>
             </div>
-          </section>
+
+            {/* Right Column: Live Emotion Matrix Log */}
+            <section className="model-result-section" style={{ height: "500px", display: "flex", flexDirection: "column", padding: "1.5rem" }}>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#ffffff", marginBottom: "1rem" }}>Inference Log Table</h3>
+              
+              {/* Structured Data Table */}
+              <div className="model-table-container" ref={tableRef} style={{ flex: 1 }}>
+                <table className="model-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "55%" }}>Transcribed Text</th>
+                      <th style={{ width: "22%" }}>Sentiment</th>
+                      <th style={{ width: "23%" }}>Emotion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analyzedSentences.map((block, idx) => {
+                      const emoStyle = getEmotionStyle(block.emotion);
+                      const catStyle = getCategoryStyle(block.sentiment_category);
+                      
+                      return (
+                        <tr key={idx}>
+                          <td className="model-table-text" style={{ fontSize: "0.85rem" }}>"{block.text}"</td>
+                          <td>
+                            <span className="model-table-badge" style={{ background: catStyle.bg, color: catStyle.text, border: `1px solid ${catStyle.text}40`, fontSize: "0.65rem" }}>
+                              {block.sentiment_category.toUpperCase()}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="model-table-badge" style={{ background: emoStyle.bg, color: emoStyle.text, fontSize: "0.65rem" }}>
+                              {block.emotion}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
         )}
       </div>
     </main>
