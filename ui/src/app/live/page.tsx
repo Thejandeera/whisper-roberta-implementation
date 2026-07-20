@@ -91,7 +91,7 @@ export default function LiveModelPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, livePartialText, accumulatedText]);
+  }, [messages]);
 
   useEffect(() => {
     return () => {
@@ -264,9 +264,7 @@ export default function LiveModelPage() {
         <header className="model-header">
           <div className="model-header__badge">Vanguard AI · Live Voice Hub</div>
           <h1 className="model-header__title">Support Voice Agent</h1>
-          <p className="model-header__subtitle">
-            Speak to interact with Zenvixor Studios' AI customer agent and see real-time emotional analysis.
-          </p>
+          
         </header>
 
         <section className="model-input-section" style={{ alignItems: "center", padding: "1.5rem" }}>
@@ -293,7 +291,7 @@ export default function LiveModelPage() {
           <div className="model-grid">
             
             <div className="model-chat-container">
-              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#ffffff", marginBottom: "1rem" }}>Support Agent Chat</h3>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#000000", marginBottom: "1rem" }}>Support Agent Chat</h3>
               
               <div className="model-chat-log">
                 {messages.map((m: any) => {
@@ -358,7 +356,7 @@ export default function LiveModelPage() {
                     <div className="model-chat-bubble-meta model-chat-bubble-meta--user">
                       <span>You (Speaking...)</span>
                     </div>
-                    <div className="model-chat-text model-chat-text--user" style={{ borderStyle: "dashed", borderColor: "rgba(255,255,255,0.3)" }}>
+                    <div className="model-chat-text model-chat-text--user" style={{ borderStyle: "dashed", borderColor: "rgba(0,0,0,0.3)" }}>
                       "{accumulatedText}{livePartialText ? " " + livePartialText : ""}..."
                     </div>
                   </div>
@@ -369,7 +367,7 @@ export default function LiveModelPage() {
             </div>
 
             <section className="model-result-section" style={{ height: "500px", display: "flex", flexDirection: "column", padding: "1.5rem" }}>
-              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#ffffff", marginBottom: "1rem" }}>Inference Log Table</h3>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#000000", marginBottom: "1rem" }}>Inference Log Table</h3>
               
               <div className="model-table-container" ref={tableRef} style={{ flex: 1 }}>
                 <table className="model-table">
