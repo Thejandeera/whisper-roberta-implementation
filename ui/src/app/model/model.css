@@ -5,7 +5,8 @@
   align-items: flex-start;
   justify-content: center;
   padding: 3rem 1.25rem 4rem;
-  background: #050508;
+  background: #ffffff;
+  color: #000000;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -24,7 +25,7 @@
   height: 520px;
   top: -10%;
   left: -8%;
-  background: radial-gradient(circle, rgba(79,70,229,0.4) 0%, rgba(0,0,0,0) 70%);
+  background: radial-gradient(circle, rgba(79,70,229,0.4) 0%, rgba(255,255,255,0) 70%);
 }
 
 .model-bg-blob--2 {
@@ -32,7 +33,7 @@
   height: 450px;
   bottom: -5%;
   right: -5%;
-  background: radial-gradient(circle, rgba(14,165,233,0.3) 0%, rgba(0,0,0,0) 70%);
+  background: radial-gradient(circle, rgba(14,165,233,0.3) 0%, rgba(255,255,255,0) 70%);
   animation-delay: -5s;
 }
 
@@ -44,7 +45,7 @@
 .model-container {
   position: relative;
   width: 100%;
-  max-width: 900px; /* Widened slightly for the table */
+  max-width: 1250px; 
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -62,25 +63,25 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #a5b4fc;
-  background: rgba(99,102,241,0.15);
+  color: #4f46e5;
+  background: rgba(79,70,229,0.1);
   padding: 0.35rem 0.85rem;
   border-radius: 9999px;
   margin-bottom: 1rem;
-  border: 1px solid rgba(99,102,241,0.3);
+  border: 1px solid rgba(79,70,229,0.2);
 }
 
 .model-header__title {
   font-size: 2.75rem;
   font-weight: 800;
-  color: #ffffff;
+  color: #000000;
   margin: 0 0 0.75rem 0;
   letter-spacing: -0.02em;
 }
 
 .model-header__subtitle {
   font-size: 1rem;
-  color: #9ca3af;
+  color: #333333;
   margin: 0;
   max-width: 500px;
   margin: 0 auto;
@@ -88,8 +89,8 @@
 }
 
 .model-input-section {
-  background: rgba(17,24,39,0.7);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
   border-radius: 20px;
   padding: 2rem;
   backdrop-filter: blur(12px);
@@ -147,8 +148,8 @@
 }
 
 .model-result-section {
-  background: linear-gradient(180deg, rgba(30,41,59,0.8) 0%, rgba(15,23,42,0.8) 100%);
-  border: 1px solid rgba(99,102,241,0.2);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
   border-radius: 20px;
   padding: 2rem;
   backdrop-filter: blur(12px);
@@ -161,29 +162,27 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 
-/* --- New Table and Live Indicator Styles --- */
-
 .model-live-indicator {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: rgba(0,0,0,0.3);
+  background: #f3f4f6;
   padding: 0.75rem 1rem;
   border-radius: 8px;
   margin-bottom: 1.5rem;
-  border-left: 3px solid #6366f1;
+  border-left: 3px solid #4f46e5;
 }
 
 .model-live-dot {
   width: 8px;
   height: 8px;
-  background: #6366f1;
+  background: #4f46e5;
   border-radius: 50%;
   animation: pulse-text 1.5s infinite;
 }
 
 .model-live-text {
-  color: #94a3b8;
+  color: #374151;
   font-style: italic;
   font-size: 0.95rem;
   white-space: nowrap;
@@ -201,8 +200,8 @@
   max-height: 400px;
   overflow-y: auto;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.05);
-  background: rgba(0,0,0,0.2);
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
 }
 
 .model-table-container::-webkit-scrollbar {
@@ -210,11 +209,11 @@
 }
 
 .model-table-container::-webkit-scrollbar-track {
-  background: rgba(0,0,0,0.1);
+  background: #f3f4f6;
 }
 
 .model-table-container::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
+  background: #d1d5db;
   border-radius: 4px;
 }
 
@@ -227,29 +226,29 @@
 .model-table th {
   position: sticky;
   top: 0;
-  background: rgba(15,23,42,0.95);
+  background: #f3f4f6;
   backdrop-filter: blur(4px);
-  color: #94a3b8;
+  color: #374151;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 1rem;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid #e5e7eb;
   z-index: 10;
 }
 
 .model-table td {
   padding: 1rem;
-  border-bottom: 1px solid rgba(255,255,255,0.02);
+  border-bottom: 1px solid #e5e7eb;
   vertical-align: middle;
 }
 
 .model-table tr:hover td {
-  background: rgba(255,255,255,0.02);
+  background: #f3f4f6;
 }
 
 .model-table-text {
-  color: #e2e8f0;
+  color: #000000;
   font-size: 0.95rem;
   line-height: 1.5;
 }
@@ -262,4 +261,109 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+}
+
+.model-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.5rem;
+  width: 100%;
+  align-items: stretch;
+}
+
+@media (max-width: 1024px) {
+  .model-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.model-chat-container {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 1.5rem;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  height: 500px;
+  animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.model-chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.model-chat-log::-webkit-scrollbar {
+  width: 6px;
+}
+
+.model-chat-log::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.model-chat-log::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.model-chat-bubble {
+  max-width: 85%;
+  display: flex;
+  flex-direction: column;
+  animation: messageFadeIn 0.3s ease forwards;
+}
+
+@keyframes messageFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.model-chat-bubble--user {
+  align-self: flex-end;
+}
+
+.model-chat-bubble--ai {
+  align-self: flex-start;
+}
+
+.model-chat-bubble-meta {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-chat-bubble-meta--user {
+  justify-content: flex-end;
+}
+
+.model-chat-text {
+  padding: 0.85rem 1.1rem;
+  border-radius: 12px;
+  line-height: 1.5;
+  font-size: 0.95rem;
+  white-space: pre-wrap;
+}
+
+.model-chat-text--user {
+  background: #f3f4f6;
+  color: #000000;
+  border-bottom-right-radius: 0;
+  border: 1px solid #e5e7eb;
+}
+
+.model-chat-text--ai {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #000000;
+  border-bottom-left-radius: 0;
 }

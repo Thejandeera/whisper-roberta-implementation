@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "@ai-sdk/react";
-import "./model.css";
+import "../model/model.css"; 
 
 interface AnalysisResult {
   text: string;
@@ -59,7 +59,7 @@ function getCategoryStyle(categoryName: string) {
   return CATEGORY_COLORS[normalized] || CATEGORY_COLORS.neutral;
 }
 
-export default function ModelPage() {
+export default function LiveModelPage() {
   const [isRecording, setIsRecording] = useState(false);
   const isRecordingRef = useRef(false);
 
@@ -67,14 +67,10 @@ export default function ModelPage() {
   const [analyzedSentences, setAnalyzedSentences] = useState<AnalysisResult[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Vercel AI SDK integration mapping to /api/chat
-  const { messages, sendMessage, setMessages, status } = useChat();
-  const isLoading = status === "streaming" || status === "submitted";
+  const { messages, setMessages } = useChat();
   
-  // Track emotion meta mapping per sentence
   const [emotionMeta, setEmotionMeta] = useState<Record<string, { emotion: string, sentiment: string }>>({});
 
-  // Accumulate transcribed text during the call session
   const [accumulatedText, setAccumulatedText] = useState("");
   const accumulatedTextRef = useRef("");
 
@@ -85,20 +81,17 @@ export default function ModelPage() {
   const tableRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Silence submission timer
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-scroll table to bottom when new items are added
   useEffect(() => {
     if (tableRef.current) {
       tableRef.current.scrollTop = tableRef.current.scrollHeight;
     }
   }, [analyzedSentences]);
 
-  // Auto-scroll chat log to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, livePartialText, accumulatedText, isLoading]);
+  }, [messages]);
 
   useEffect(() => {
     return () => {
@@ -117,13 +110,13 @@ export default function ModelPage() {
     const finalSpeech = accumulatedTextRef.current.trim();
     if (finalSpeech) {
       try {
-        sendMessage({ text: finalSpeech });
-      } catch (err) {
-        console.error("Error sending message to chatbot:", err);
-      }
+        setMessages((prev: any) => [
+          ...prev,
+          { id: Date.now().toString(), role: "user", content: finalSpeech }
+        ]);
+      } catch (err) {}
     }
     
-    // Clear client-side buffers for the next turn while keeping socket/mic alive
     accumulatedTextRef.current = "";
     setAccumulatedText("");
     setLivePartialText("");
@@ -134,7 +127,6 @@ export default function ModelPage() {
       clearTimeout(silenceTimerRef.current);
     }
     
-    // Trigger submission after 3 seconds of absolute silence (no active speech updates)
     silenceTimerRef.current = setTimeout(() => {
       submitAccumulatedSpeech();
     }, 3000);
@@ -147,7 +139,7 @@ export default function ModelPage() {
       setAccumulatedText("");
       accumulatedTextRef.current = "";
       setAnalyzedSentences([]);
-      setMessages([]); // Clear chat history on new session
+      setMessages([]); 
       setEmotionMeta({});
       
       isRecordingRef.current = true;
@@ -157,16 +149,14 @@ export default function ModelPage() {
         silenceTimerRef.current = null;
       }
 
-      wsRef.current = new WebSocket("ws://localhost:8001/live-stream");
+      wsRef.current = new WebSocket("ws://localhost:8001/live-stream-vad");
       
       wsRef.current.onmessage = (event) => {
-        // Prevent updates if we have stopped listening
         if (!isRecordingRef.current) return;
 
         const data = JSON.parse(event.data);
         const cleanText = data.text ? data.text.trim() : "";
 
-        // Reset the silence timer ONLY if the server transcribes a non-empty text
         if (cleanText) {
           resetSilenceTimer();
         }
@@ -174,19 +164,15 @@ export default function ModelPage() {
         if (data.type === "partial") {
           setLivePartialText(data.text);
         } else if (data.type === "analyzed") {
-          // 1. Add sentence to the analyzed matrix list on the right
           setAnalyzedSentences((prev) => [...prev, data]);
           
-          // 2. Map emotion metadata to this specific text
           setEmotionMeta(prev => ({
             ...prev,
             [data.text]: { emotion: data.emotion, sentiment: data.sentiment_category }
           }));
 
-          // 3. Clear partial text
           setLivePartialText(""); 
 
-          // 4. Accumulate the clean text to the turn's transcript
           if (cleanText) {
             const separator = accumulatedTextRef.current ? " " : "";
             accumulatedTextRef.current += separator + cleanText;
@@ -202,7 +188,7 @@ export default function ModelPage() {
       audioContextRef.current = audioContext;
       
       const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      const processor = audioContext.createScriptProcessor(512, 1, 1);
       processorRef.current = processor;
 
       source.connect(processor);
@@ -223,7 +209,6 @@ export default function ModelPage() {
       setIsRecording(true);
 
     } catch (err: any) {
-      console.error("Error accessing microphone:", err);
       setError("Microphone access denied or connection failed.");
       isRecordingRef.current = false;
       setIsRecording(false);
@@ -243,17 +228,13 @@ export default function ModelPage() {
       if (processorRef.current) {
         processorRef.current.disconnect();
       }
-    } catch (e) {
-      console.warn("Error disconnecting audio processor:", e);
-    }
+    } catch (e) {}
     
     try {
       if (audioContextRef.current && audioContextRef.current.state !== "closed") {
         audioContextRef.current.close();
       }
-    } catch (e) {
-      console.warn("Error closing audio context:", e);
-    }
+    } catch (e) {}
     
     try {
       if (streamRef.current) {
@@ -263,19 +244,14 @@ export default function ModelPage() {
           } catch (err) {}
         });
       }
-    } catch (e) {
-      console.warn("Error stopping media tracks:", e);
-    }
+    } catch (e) {}
 
     try {
       if (wsRef.current) {
         wsRef.current.close();
       }
-    } catch (e) {
-      console.warn("Error closing WebSocket:", e);
-    }
+    } catch (e) {}
 
-    // Submit any final accumulated text
     submitAccumulatedSpeech();
   };
 
@@ -286,11 +262,9 @@ export default function ModelPage() {
       
       <div className="model-container">
         <header className="model-header">
-          <div className="model-header__badge">Vanguard AI · model Voice Hub</div>
+          <div className="model-header__badge">Vanguard AI · Live Voice Hub</div>
           <h1 className="model-header__title">Support Voice Agent</h1>
-          <p className="model-header__subtitle">
-            Speak to interact with Zenvixor Studios' AI customer agent and see real-time emotional analysis.
-          </p>
+          
         </header>
 
         <section className="model-input-section" style={{ alignItems: "center", padding: "1.5rem" }}>
@@ -316,19 +290,19 @@ export default function ModelPage() {
         {(messages.length > 0 || livePartialText || accumulatedText || analyzedSentences.length > 0) && (
           <div className="model-grid">
             
-            {/* Left Column: Support Chatbot */}
             <div className="model-chat-container">
-              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#ffffff", marginBottom: "1rem" }}>Support Agent Chat</h3>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#000000", marginBottom: "1rem" }}>Support Agent Chat</h3>
               
               <div className="model-chat-log">
-                {messages.map((m) => {
+                {messages.map((m: any) => {
                   const textContent = m.parts
-                    .filter((part) => part.type === "text")
-                    .map((part) => part.text)
-                    .join("");
+                    ? m.parts
+                        .filter((part: any) => part.type === "text")
+                        .map((part: any) => part.text)
+                        .join("")
+                    : m.content;
                     
                   if (m.role === 'user') {
-                    // Split the user message by punctuation to look up individual sentence emotions
                     const userSentences = textContent.split(/(?<=[.!?])\s+/);
                     
                     return (
@@ -337,7 +311,7 @@ export default function ModelPage() {
                           <span>You</span>
                         </div>
                         <div className="model-chat-text model-chat-text--user">
-                          {userSentences.map((sentence, sIdx) => {
+                          {userSentences.map((sentence: string, sIdx: number) => {
                             const trimmed = sentence.trim();
                             if (!trimmed) return null;
                             const meta = emotionMeta[trimmed] || emotionMeta[trimmed + "."] || emotionMeta[trimmed.replace(/\.$/, "")];
@@ -365,7 +339,6 @@ export default function ModelPage() {
                     );
                   }
                   
-                  // AI Agent Response
                   return (
                     <div key={m.id} className="model-chat-bubble model-chat-bubble--ai">
                       <div className="model-chat-bubble-meta">
@@ -378,24 +351,13 @@ export default function ModelPage() {
                   );
                 })}
 
-                {/* User's active/preview speech bubble while recording */}
                 {(accumulatedText || livePartialText) && isRecording && (
                   <div className="model-chat-bubble model-chat-bubble--user" style={{ opacity: 0.85 }}>
                     <div className="model-chat-bubble-meta model-chat-bubble-meta--user">
                       <span>You (Speaking...)</span>
                     </div>
-                    <div className="model-chat-text model-chat-text--user" style={{ borderStyle: "dashed", borderColor: "rgba(255,255,255,0.3)" }}>
+                    <div className="model-chat-text model-chat-text--user" style={{ borderStyle: "dashed", borderColor: "rgba(0,0,0,0.3)" }}>
                       "{accumulatedText}{livePartialText ? " " + livePartialText : ""}..."
-                    </div>
-                  </div>
-                )}
-
-                {/* Agent is generating loading bubble */}
-                {isLoading && messages[messages.length - 1]?.role === 'user' && (
-                  <div className="model-chat-bubble model-chat-bubble--ai">
-                    <div className="model-chat-bubble-meta">
-                      <span className="model-live-dot" style={{ display: "inline-block" }}></span>
-                      <span>Vanguard is generating response...</span>
                     </div>
                   </div>
                 )}
@@ -404,11 +366,9 @@ export default function ModelPage() {
               </div>
             </div>
 
-            {/* Right Column: Live Emotion Matrix Log */}
             <section className="model-result-section" style={{ height: "500px", display: "flex", flexDirection: "column", padding: "1.5rem" }}>
-              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#ffffff", marginBottom: "1rem" }}>Inference Log Table</h3>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#000000", marginBottom: "1rem" }}>Inference Log Table</h3>
               
-              {/* Structured Data Table */}
               <div className="model-table-container" ref={tableRef} style={{ flex: 1 }}>
                 <table className="model-table">
                   <thead>
