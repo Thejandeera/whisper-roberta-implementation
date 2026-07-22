@@ -5,10 +5,13 @@ import re
 import time
 import sys
 import wave
+import base64
+import tempfile
 import numpy as np
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from faster_whisper import WhisperModel
 from transformers import pipeline
 from huggingface_hub import snapshot_download
@@ -39,6 +42,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class Base64AudioPayload(BaseModel):
+    audio_data: str
 
 whisper_model = None
 whisper_model_large = None
@@ -84,6 +90,35 @@ def load_models():
 def predict_emotion(text: str) -> dict:
     result = roberta_model(text, truncation=True, max_length=512)[0]
     return {"label": result["label"], "score": round(result["score"], 4)}
+
+@app.post("/api/v1/analyze-audio")
+async def analyze_audio_rest(payload: Base64AudioPayload):
+    start_time = time.time()
+    
+    try:
+        audio_bytes = base64.b64decode(payload.audio_data)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            tmp_file.write(audio_bytes)
+            temp_file_path = tmp_file.name
+    except Exception as e:
+        return {"error": f"Failed to decode base64 audio: {str(e)}"}
+
+    try:
+        segments, _ = whisper_model_large.transcribe(temp_file_path, beam_size=5, vad_filter=True)
+        transcript = " ".join([segment.text for segment in segments]).strip()
+            
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+    end_time = time.time()
+    processing_time = round(end_time - start_time, 2)
+
+    return {
+        "status": "success",
+        "processing_time_seconds": processing_time,
+        "transcript": transcript
+    }
 
 @app.websocket("/live-stream")
 async def live_stream(websocket: WebSocket):
