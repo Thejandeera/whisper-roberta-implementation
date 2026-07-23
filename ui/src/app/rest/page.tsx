@@ -8,6 +8,9 @@ export default function RestApiPage() {
   const [base64String, setBase64String] = useState<string>("");
   const [transcript, setTranscript] = useState<string>("");
   const [processingTime, setProcessingTime] = useState<number | null>(null);
+  const [emotion, setEmotion] = useState<string | null>(null);
+  const [sentimentCategory, setSentimentCategory] = useState<string | null>(null);
+  const [confidence, setConfidence] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [copyText, setCopyText] = useState<string>("Copy Base64");
@@ -21,6 +24,9 @@ export default function RestApiPage() {
     setFile(selectedFile);
     setTranscript("");
     setProcessingTime(null);
+    setEmotion(null);
+    setSentimentCategory(null);
+    setConfidence(null);
     setError(null);
     setCopyText("Copy Base64");
 
@@ -46,6 +52,9 @@ export default function RestApiPage() {
     setError(null);
     setTranscript("");
     setProcessingTime(null);
+    setEmotion(null);
+    setSentimentCategory(null);
+    setConfidence(null);
 
     try {
       const response = await fetch("http://localhost:8001/api/v1/analyze-audio", {
@@ -61,6 +70,9 @@ export default function RestApiPage() {
       if (data.status === "success") {
         setTranscript(data.transcript);
         setProcessingTime(data.processing_time_seconds);
+        setEmotion(data.emotion || null);
+        setSentimentCategory(data.sentiment_category || null);
+        setConfidence(data.confidence ?? null);
       } else {
         setError(data.error || "An error occurred during transcription.");
       }
@@ -116,6 +128,30 @@ export default function RestApiPage() {
               <p className="rest-stat">
                 {processingTime !== null ? `${processingTime} seconds` : "--"}
               </p>
+            </div>
+            <div className="rest-box">
+              <h3>Sentiment & Emotion</h3>
+              {sentimentCategory ? (
+                <div className="rest-sentiment-container">
+                  <div className="rest-badge-group">
+                    <span className={`rest-badge rest-badge-${sentimentCategory.toLowerCase()}`}>
+                      {sentimentCategory}
+                    </span>
+                    {emotion && (
+                      <span className="rest-emotion-pill">
+                        {emotion}
+                      </span>
+                    )}
+                  </div>
+                  {confidence !== null && (
+                    <p className="rest-confidence">
+                      Confidence: {(confidence * 100).toFixed(1)}% ({confidence.toFixed(4)})
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="rest-stat">--</p>
+              )}
             </div>
             <div className="rest-box rest-transcript-box">
               <h3>Transcript</h3>

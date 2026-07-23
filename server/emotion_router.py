@@ -111,13 +111,29 @@ async def analyze_audio_rest(payload: Base64AudioPayload):
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
+    emotion = "neutral"
+    sentiment_category = "neutral"
+    confidence = 0.0
+
+    if transcript:
+        try:
+            emotion_data = predict_emotion(transcript)
+            emotion = emotion_data["label"]
+            confidence = emotion_data["score"]
+            sentiment_category = categorize_emotion(emotion, confidence)
+        except Exception as emo_err:
+            print(f"Emotion prediction error: {emo_err}")
+
     end_time = time.time()
     processing_time = round(end_time - start_time, 2)
 
     return {
         "status": "success",
         "processing_time_seconds": processing_time,
-        "transcript": transcript
+        "transcript": transcript,
+        "emotion": emotion,
+        "sentiment_category": sentiment_category,
+        "confidence": confidence
     }
 
 @app.websocket("/live-stream")
