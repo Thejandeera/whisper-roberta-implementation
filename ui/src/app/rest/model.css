@@ -85,13 +85,80 @@
 
 .rest-results-grid {
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
+}
+
+.rest-transcript-box {
+  grid-column: 1 / -1;
+}
+
+.rest-sentiment-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rest-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.rest-badge {
+  display: inline-block;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+}
+
+.rest-badge-positive {
+  background-color: #10b981;
+  color: #ffffff;
+  border: 1px solid #10b981;
+}
+
+.rest-badge-negative {
+  background-color: #ef4444;
+  color: #ffffff;
+  border: 1px solid #ef4444;
+}
+
+.rest-badge-neutral {
+  background-color: #6b7280;
+  color: #ffffff;
+  border: 1px solid #6b7280;
+}
+
+.rest-emotion-pill {
+  background-color: #000000;
+  color: #ffffff;
+  border: 1px solid #000000;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+}
+
+.rest-confidence {
+  font-size: 0.875rem;
+  color: #4b5563;
+  font-weight: 600;
+  margin: 0;
 }
 
 @media (max-width: 768px) {
   .rest-results-grid {
     grid-template-columns: 1fr;
+  }
+  .rest-transcript-box {
+    grid-column: 1;
   }
   .rest-input-group {
     flex-direction: column;
